@@ -63,17 +63,3 @@ class SocketClient:
             print(f"Received: {data.decode()}")
 
         self.client.close()
-
-
-if __name__ == '__main__':
-    client = SocketClient(port=8000)
-    client.client_open()
-    command = {
-        "acquire_one": {
-            "camera_id": "DEV_1AB22C02A245",
-            "project_name": "ZhenYaoYao",
-            "save_dir": r"D:/python_workspace/allied_vision_api/liuwei"
-        }
-    }
-    client.client_send(json.dumps(command))
-    time.sleep(100)

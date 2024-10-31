@@ -62,9 +62,9 @@ class CygSocketServerAsyncio:
         if client_connection:
             client_ip = client_connection.getpeername()
             await self.loop.sock_sendall(client_connection, data)
-            self._logger.info(f"***发送*** --> {client_ip} 发送成功, {data}")
+            self._logger.info("***发送*** --> %s 发送成功, %s", client_ip, data)
         else:
-            self._logger.info(f"***发送*** --> 发送失败, {data}, 未连接")
+            self._logger.info("***发送*** --> 发送失败, %s, 未连接", data)
 
     async def receive_send(self, client_connection: socket.socket):
         """接收发送数据."""
@@ -72,31 +72,33 @@ class CygSocketServerAsyncio:
         try:
             while data := await self.loop.sock_recv(client_connection, 1024 * 1024):
                 self._logger.info(f"{ '-' * 60}")
-                self._logger.info(f"***Socket接收*** --> {client_ip}, 数据: {data.decode('UTF-8')}")
+                self._logger.info("***Socket接收*** --> %s, 数据: %s", client_ip, data.decode('UTF-8'))
                 send_data = self.operations_return_data(data)  # 这个方法实现具体业务, 需要重写, 不重写回显
                 send_data_byte = send_data.encode("UTF-8") + b"\r\n"
                 await self.loop.sock_sendall(client_connection, send_data_byte)
-                self._logger.info(f"***Socket回复*** --> {client_ip}, 数据: {send_data}")
+                self._logger.info("***Socket回复*** --> %s, 数据: %s", client_ip, send_data)
                 self._logger.info(f"{ '-' * 60}")
         except Exception as e:  # pylint: disable=W0718
-            self._logger.warning(f"***通讯出现异常*** --> 异常信息是: {e}")
+            self._logger.warning("***通讯出现异常*** --> 异常信息是: %s", e)
         finally:
             self.clients.pop(client_ip)
             self.tasks.get(client_ip).cancel()
-            self._logger.warning(f"***下位机断开*** --> {client_ip}, 断开了")
+            self._logger.warning("***下位机断开*** --> %s, 断开了", client_ip)
             client_connection.close()
 
     async def listen_for_connection(self, socket_server: socket):
         """异步监听连接."""
-        self._logger.info(f"***服务端已启动*** --> {socket_server.getsockname()} 等待客户端连接")
+        self._logger.info("***服务端已启动*** --> %s 等待客户端连接", socket_server.getsockname())
 
         while True:
             self.loop = asyncio.get_running_loop()
             client_connection, address = await self.loop.sock_accept(socket_server)
             client_connection.setblocking(False)
             self.clients.update({address[0]: client_connection})
-            self.tasks.update({address[0]: self.loop.create_task(self.receive_send(client_connection))})
-            self._logger.warning(f"***下位机连接*** --> {address}, 连接了")
+            self.tasks.update({
+                address[0]: self.loop.create_task(self.receive_send(client_connection))
+            })
+            self._logger.warning("***下位机连接*** --> %s, 连接了", address)
 
     async def run_socket_server(self):
         """运行socket服务, 并监听客户端连接."""
