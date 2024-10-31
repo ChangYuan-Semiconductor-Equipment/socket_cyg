@@ -40,7 +40,7 @@ class CygSocketServerAsyncio:
         if self._file_handler is None:
             log_dir = f"{os.getcwd()}/log"
             os.makedirs(log_dir, exist_ok=True)
-            file_name = f"{log_dir}/{datetime.datetime.now().strftime('%Y-%m-%d')}"
+            file_name = f"{log_dir}/{datetime.datetime.now().strftime('%Y-%m-%d')}_{os.path.basename(os.getcwd())}.log"
             self._file_handler = TimedRotatingFileHandler(
                 file_name, when="D", interval=1, backupCount=10, encoding="UTF-8"
             )
