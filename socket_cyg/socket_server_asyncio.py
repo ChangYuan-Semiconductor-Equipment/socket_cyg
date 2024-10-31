@@ -32,6 +32,10 @@ class CygSocketServerAsyncio:
         if sys.version_info.minor == 11:
             logging.basicConfig(level=logging.INFO, encoding="UTF-8", format=self.LOG_FORMAT)
         else:
+            console_handler = logging.StreamHandler()
+            console_handler.setFormatter(logging.Formatter(self.LOG_FORMAT))
+            console_handler.setLevel(logging.INFO)
+            self.logger.addHandler(console_handler)
             self.logger.setLevel(logging.INFO)
 
     @property
