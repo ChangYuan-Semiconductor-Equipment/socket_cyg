@@ -1,7 +1,5 @@
 """socket 客户端."""
-import json
 import socket
-import time
 
 
 class SocketClient:

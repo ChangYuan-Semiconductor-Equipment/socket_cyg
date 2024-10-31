@@ -71,13 +71,13 @@ class CygSocketServerAsyncio:
         client_ip = client_connection.getpeername()[0]  # 获取连接客户端的ip
         try:
             while data := await self.loop.sock_recv(client_connection, 1024 * 1024):
-                self._logger.info(f"{ '-' * 60}")
+                self._logger.info("%s", '-' * 60)
                 self._logger.info("***Socket接收*** --> %s, 数据: %s", client_ip, data.decode('UTF-8'))
                 send_data = self.operations_return_data(data)  # 这个方法实现具体业务, 需要重写, 不重写回显
                 send_data_byte = send_data.encode("UTF-8") + b"\r\n"
                 await self.loop.sock_sendall(client_connection, send_data_byte)
                 self._logger.info("***Socket回复*** --> %s, 数据: %s", client_ip, send_data)
-                self._logger.info(f"{ '-' * 60}")
+                self._logger.info("%s", '-' * 60)
         except Exception as e:  # pylint: disable=W0718
             self._logger.warning("***通讯出现异常*** --> 异常信息是: %s", e)
         finally:
