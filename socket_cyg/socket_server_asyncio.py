@@ -7,6 +7,7 @@ import socket
 import sys
 from asyncio import AbstractEventLoop
 from logging.handlers import TimedRotatingFileHandler
+from typing import Union
 
 
 class CygSocketServerAsyncio:
@@ -23,6 +24,7 @@ class CygSocketServerAsyncio:
         self._logger = logging.getLogger(f"{self.__module__}.{self.__class__.__name__}")
         self._file_handler = None
         self.set_log()
+        self.queue = asyncio.Queue()
 
     def set_log(self):
         """设置日志."""
@@ -61,8 +63,10 @@ class CygSocketServerAsyncio:
         self._logger.warning("*** 回显 *** -> 没有重写 operations_return_data 函数, 默认是回显.")
         return data
 
-    async def socket_send(self, client_connection, data: bytes):
+    async def socket_send(self, client_connection, data: Union[bytes, str]):
         """发送数据给客户端."""
+        if isinstance(data, str):
+            data = data.encode("utf-8")
         if client_connection:
             client_ip = client_connection.getpeername()
             await self.loop.sock_sendall(client_connection, data)
@@ -75,13 +79,30 @@ class CygSocketServerAsyncio:
         client_ip = client_connection.getpeername()[0]  # 获取连接客户端的ip
         try:
             while data := await self.loop.sock_recv(client_connection, 1024 * 1024):
-                self._logger.info("%s", '-' * 60)
-                self._logger.info("***Socket接收*** --> %s, 数据: %s", client_ip, data.decode('UTF-8'))
-                send_data = self.operations_return_data(data)  # 这个方法实现具体业务, 需要重写, 不重写回显
-                send_data_byte = send_data.encode("UTF-8") + b"\r\n"
-                await self.loop.sock_sendall(client_connection, send_data_byte)
-                self._logger.info("***Socket回复*** --> %s, 数据: %s", client_ip, send_data)
-                self._logger.info("%s", '-' * 60)
+                str_data = data.decode("UTF-8")
+                self._logger.info("%s", "-" * 60)
+                self._logger.info("***Socket接收*** --> %s, 数据: %s", client_ip, str_data)
+
+                commands = str_data.split("@_@")[:-1:]
+                self._logger.info("*** 本次接收到指令的个数 *** --> %s", len(commands))
+
+                for command_data in commands:
+                    await self.queue.put(command_data)
+
+                while True:
+                    if self.queue.qsize() == 0:
+                        break
+                    command_data = await self.queue.get()
+                    if command_data is None:
+                        break
+                    self._logger.info("*** 从队列中获取一个指令和数据 *** -> %s", command_data)
+                    self.queue.task_done()
+
+                    send_data = self.operations_return_data(command_data)  # 这个方法实现具体业务, 需要重写, 不重写回显
+                    send_data_byte = send_data.encode("UTF-8")
+                    await self.loop.sock_sendall(client_connection, send_data_byte)
+                    self._logger.info("***Socket回复*** --> %s, 数据: %s", client_ip, send_data)
+                    self._logger.info("%s", "-" * 60)
         except Exception as e:  # pylint: disable=W0718
             self._logger.warning("***通讯出现异常*** --> 异常信息是: %s", e)
         finally:
@@ -97,12 +118,14 @@ class CygSocketServerAsyncio:
         while True:
             self.loop = asyncio.get_running_loop()
             client_connection, address = await self.loop.sock_accept(socket_server)
+            self._logger.warning("***下位机连接*** --> %s, 连接了", address)
+
             client_connection.setblocking(False)
             self.clients.update({address[0]: client_connection})
             self.tasks.update({
                 address[0]: self.loop.create_task(self.receive_send(client_connection))
             })
-            self._logger.warning("***下位机连接*** --> %s, 连接了", address)
+            await self.socket_send(client_connection, "^_^")
 
     async def run_socket_server(self):
         """运行socket服务, 并监听客户端连接."""
