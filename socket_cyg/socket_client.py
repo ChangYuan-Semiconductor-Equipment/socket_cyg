@@ -107,7 +107,7 @@ class SocketClient:
                 str_data = data.decode("utf-8")
                 self._logger.info("*** 客户端接收到服务端数据 *** -> data: %s", str_data)
                 self.operations()
-        except Exception as e:
+        except Exception as e:  # pylint: disable=W0718
             self._logger.warning("*** 出现异常 *** -> 异常信息: %s", str(e))
         finally:
             self.client.close()

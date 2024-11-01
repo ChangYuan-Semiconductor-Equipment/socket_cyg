@@ -10,6 +10,7 @@ from logging.handlers import TimedRotatingFileHandler
 from typing import Union
 
 
+# pylint: disable=R0801
 class CygSocketServerAsyncio:
     """异步socket class."""
     LOG_FORMAT = "%(asctime)s - %(levelname)s - %(module)s:%(lineno)d - %(message)s"
