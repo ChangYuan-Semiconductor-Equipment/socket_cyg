@@ -104,6 +104,8 @@ class SocketClient:
         try:
             while True:
                 data = self.client.recv(1024)
+                if not data:
+                    break
                 str_data = data.decode("utf-8")
                 self._logger.info("*** 客户端接收到服务端数据 *** -> data: %s", str_data)
                 self.operations()
