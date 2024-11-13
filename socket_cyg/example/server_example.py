@@ -19,9 +19,11 @@ if __name__ == '__main__':
     server = CygSocketServerAsyncio(end_identifier=b"@__@")
 
     def run_server():
+        """启动server."""
         asyncio.run(server.run_socket_server())
 
     def run_consumer():
+        """启动消费队列."""
         asyncio.run(server.consumer(save))
 
     threading.Thread(target=run_server).start()
