@@ -99,7 +99,7 @@ class SocketClient:
         if isinstance(message, str):
             message = message.encode("UTF-8")
         self.client.sendall(message)
-        self._logger.debug("*** 客户端发送数据 *** -> data: %s", message)
+        self._logger.info("*** 客户端发送数据 *** -> data: %s", message[:129:])
 
     def client_receive(self):
         """客户端接收数据."""

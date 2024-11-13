@@ -92,16 +92,14 @@ class CygSocketServerAsyncio:
             while data_byte := await self.loop.sock_recv(client_connection, 1024 * 1024):
                 buffer_byte += data_byte
                 if self._end_identifier in buffer_byte:
+                    await self.socket_send(client_connection, b"^_^")
                     one_message_byte, remaining = buffer_byte.split(self._end_identifier, 1)
                     buffer_byte = remaining
                     keys, datas = one_message_byte.split(self._key_value_split, 1)
                     await self.queue.put({keys: datas})
-                    await self.socket_send(client_connection, b"^_^")
-                    self._logger.info("*** 收到一条完整消息 ***")
+                    self._logger.info("*** 将一条完整消息放入队列 ***")
                     self._logger.info("keys: %s", keys)
-                    self._logger.info("*** 正在根据消息执行操作 ***")
-                    self._logger.debug("datas: %s", datas)
-
+                    self._logger.info("datas: %s", datas[:129:])
         except Exception as e:  # pylint: disable=W0718
             self._logger.warning("*** 通讯出现异常 *** --> 异常信息是: %s", e)
         finally:

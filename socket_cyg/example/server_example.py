@@ -5,6 +5,7 @@ import threading
 
 from socket_cyg.socket_server_asyncio import CygSocketServerAsyncio
 
+
 def save(data):
     """保存文件的函数."""
     dir_path, datas = list(data.keys())[0], list(data.values())[0]
