@@ -6,6 +6,7 @@ import sys
 import threading
 import logging
 from logging.handlers import TimedRotatingFileHandler
+from typing import Union
 
 
 class SocketClient:
@@ -93,11 +94,12 @@ class SocketClient:
         self.client.close()
         self._logger.warning("*** 客户端关闭连接 ***")
 
-    def client_send(self, message: str):
+    def client_send(self, message: Union[str, bytes]):
         """客户端发送数据."""
-        data = message.encode("UTF-8")
-        self.client.sendall(data)
-        self._logger.info("*** 客户端发送数据 *** -> data: %s", data)
+        if isinstance(message, str):
+            message = message.encode("UTF-8")
+        self.client.sendall(message)
+        self._logger.debug("*** 客户端发送数据 *** -> data: %s", message)
 
     def client_receive(self):
         """客户端接收数据."""

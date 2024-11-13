@@ -19,9 +19,11 @@ class CygSocketServerAsyncio:
     tasks = {}
     loop: AbstractEventLoop = None
 
-    def __init__(self, address="127.0.0.1", port=8000):
+    def __init__(self, address="127.0.0.1", port=8000, key_value_split=b"-_-", end_identifier=b"@_@"):
         self._address = address
         self._port = port
+        self._key_value_split = key_value_split
+        self._end_identifier = end_identifier
         self._logger = logging.getLogger(f"{self.__module__}.{self.__class__.__name__}")
         self._file_handler = None
         self.set_log()
@@ -58,75 +60,70 @@ class CygSocketServerAsyncio:
         """日志实例."""
         return self._logger
 
-    def operations_return_data(self, data: bytes):
-        """操作返回数据."""
-        data = data.decode("UTF-8")
-        self._logger.warning("*** 回显 *** -> 没有重写 operations_return_data 函数, 默认是回显.")
-        return data
+    async def consumer(self, operation_func: callable):
+        """获取队列里客户端发来的数据进行处理.
+
+        Args:
+            operation_func: 处理函数.
+        """
+        while True:
+            while self.queue.qsize() != 0:
+                data = await self.queue.get()
+                operation_func(data)
+                self.queue.task_done()
 
     async def socket_send(self, client_connection, data: Union[bytes, str]):
         """发送数据给客户端."""
         if isinstance(data, str):
-            data = data.encode("utf-8")
+            data = data.encode("UTF-8")
         if client_connection:
             client_ip = client_connection.getpeername()
             await self.loop.sock_sendall(client_connection, data)
-            self._logger.info("***发送*** --> %s 发送成功, %s", client_ip, data)
+            self._logger.info("*** 发送 *** --> %s 发送成功, %s", client_ip, data)
         else:
-            self._logger.info("***发送*** --> 发送失败, %s, 未连接", data)
+            self._logger.info("*** 发送 *** --> 发送失败, %s, 未连接", data)
 
     async def receive_send(self, client_connection: socket.socket):
         """接收发送数据."""
         client_ip = client_connection.getpeername()[0]  # 获取连接客户端的ip
+        self._logger.info("%s 处理 %s 客户端的任务开始 %s", "-" * 30, client_ip, "-" * 30)
+        buffer_byte = b""
         try:
-            while data := await self.loop.sock_recv(client_connection, 1024 * 1024):
-                str_data = data.decode("UTF-8")
-                self._logger.info("%s", "-" * 60)
-                self._logger.info("***Socket接收*** --> %s, 数据: %s", client_ip, str_data)
+            while data_byte := await self.loop.sock_recv(client_connection, 1024 * 1024):
+                buffer_byte += data_byte
+                if self._end_identifier in buffer_byte:
+                    one_message_byte, remaining = buffer_byte.split(self._end_identifier, 1)
+                    buffer_byte = remaining
+                    keys, datas = one_message_byte.split(self._key_value_split, 1)
+                    await self.queue.put({keys: datas})
+                    await self.socket_send(client_connection, b"^_^")
+                    self._logger.info("*** 收到一条完整消息 ***")
+                    self._logger.info("keys: %s", keys)
+                    self._logger.info("*** 正在根据消息执行操作 ***")
+                    self._logger.debug("datas: %s", datas)
 
-                commands = str_data.split("@_@")[:-1:]
-                self._logger.info("*** 本次接收到指令的个数 *** --> %s", len(commands))
-
-                for command_data in commands:
-                    await self.queue.put(command_data)
-
-                while True:
-                    if self.queue.qsize() == 0:
-                        break
-                    command_data = await self.queue.get()
-                    if command_data is None:
-                        break
-                    self._logger.info("*** 从队列中获取一个指令和数据 *** -> %s", command_data)
-                    self.queue.task_done()
-
-                    send_data = self.operations_return_data(command_data)  # 这个方法实现具体业务, 需要重写, 不重写回显
-                    send_data_byte = send_data.encode("UTF-8")
-                    await self.loop.sock_sendall(client_connection, send_data_byte)
-                    self._logger.info("***Socket回复*** --> %s, 数据: %s", client_ip, send_data)
-                    self._logger.info("%s", "-" * 60)
         except Exception as e:  # pylint: disable=W0718
-            self._logger.warning("***通讯出现异常*** --> 异常信息是: %s", e)
+            self._logger.warning("*** 通讯出现异常 *** --> 异常信息是: %s", e)
         finally:
             self.clients.pop(client_ip)
             self.tasks.get(client_ip).cancel()
-            self._logger.warning("***下位机断开*** --> %s, 断开了", client_ip)
+            self._logger.warning("*** 下位机断开 *** --> %s, 断开了", client_ip)
+            self._logger.info("%s 处理 %s 客户端的任务结束 %s", "-" * 30, client_ip, "-" * 30)
             client_connection.close()
 
     async def listen_for_connection(self, socket_server: socket):
         """异步监听连接."""
-        self._logger.info("***服务端已启动*** --> %s 等待客户端连接", socket_server.getsockname())
+        self._logger.info("*** 服务端已启动 *** --> %s 等待客户端连接", socket_server.getsockname())
 
         while True:
             self.loop = asyncio.get_running_loop()
             client_connection, address = await self.loop.sock_accept(socket_server)
-            self._logger.warning("***下位机连接*** --> %s, 连接了", address)
-
+            self._logger.warning("*** 下位机连接 *** --> %s, 连接了", address)
             client_connection.setblocking(False)
-            self.clients.update({address[0]: client_connection})
-            self.tasks.update({
-                address[0]: self.loop.create_task(self.receive_send(client_connection))
-            })
             await self.socket_send(client_connection, "^_^")
+            self.clients.update({address[0]: client_connection})
+            self.tasks.update({address[0]: self.loop.create_task(self.receive_send(client_connection))})
+            self._logger.warning("*** 创建了处理 %s 客户端的任务 ***", address)
 
     async def run_socket_server(self):
         """运行socket服务, 并监听客户端连接."""
