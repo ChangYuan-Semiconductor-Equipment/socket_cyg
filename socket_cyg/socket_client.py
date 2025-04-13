@@ -1,125 +1,126 @@
-"""socket 客户端."""
-import datetime
-import os
 import socket
-import sys
 import threading
+import time
 import logging
-from logging.handlers import TimedRotatingFileHandler
-from typing import Union
+from typing import Callable, Optional
 
 
 class SocketClient:
-    """socket 客户端class."""
-    LOG_FORMAT = "%(asctime)s - %(levelname)s - %(module)s:%(lineno)d - %(message)s"
+    """用于持续与服务器通信的 TCP Socket 客户端."""
 
+    def __init__(self, host: str, port: int,
+                 receive_callback: Optional[Callable[[bytes], None]] = None,
+                 buffer_size: int = 1024):
+        """初始化 Socket 客户端。
 
-    def __init__(self, host="127.0.0.1", port=8000):
-        self._logger = logging.getLogger(f"{self.__module__}.{self.__class__.__name__}")
-        self._file_handler = None
-        self.set_log()
+        Args:
+            host: 要连接的服务器主机名或 IP 地址。
+            port: 服务器端口号。
+            receive_callback: 处理接收数据的回调函数（可选）。
+                回调函数应接受 bytes 类型作为唯一参数。
+            buffer_size: 接收缓冲区大小（字节），默认为 1024。
+        """
+        self.host = host
+        self.port = port
+        self.buffer_size = buffer_size
+        self.receive_callback = receive_callback
+        self.socket = None
+        self.is_connected = False
+        self.receive_thread = None
+        self.logger = logging.getLogger(self.__class__.__name__)
 
-        self._host = host
-        self._port = port
-        self._client = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+    def connect(self) -> bool:
+        """建立与服务器的连接, 连接成功后会自动启动后台线程持续接收数据.
 
-    def set_log(self):
-        """设置日志."""
-        self.file_handler.setFormatter(logging.Formatter(self.LOG_FORMAT))
-        self.file_handler.setLevel(logging.INFO)
-        self.logger.addHandler(self.file_handler)
-        if sys.version_info.minor == 11:
-            logging.basicConfig(level=logging.INFO, encoding="UTF-8", format=self.LOG_FORMAT)
-        else:
-            console_handler = logging.StreamHandler()
-            console_handler.setFormatter(logging.Formatter(self.LOG_FORMAT))
-            console_handler.setLevel(logging.INFO)
-            self.logger.addHandler(console_handler)
-            self.logger.setLevel(logging.INFO)
-
-    @property
-    def file_handler(self):
-        """保存日志的日志处理器."""
-        if self._file_handler is None:
-            log_dir = f"{os.getcwd()}/log"
-            os.makedirs(log_dir, exist_ok=True)
-            file_name = f"{log_dir}/{datetime.datetime.now().strftime('%Y-%m-%d')}_{os.path.basename(os.getcwd())}.log"
-            self._file_handler = TimedRotatingFileHandler(
-                file_name, when="D", interval=1, backupCount=10, encoding="UTF-8"
-            )
-        return self._file_handler
-
-    @property
-    def logger(self):
-        """日志器."""
-        return self._logger
-
-    @property
-    def host(self):
-        """服务端ip."""
-        return self._host
-
-    @host.setter
-    def host(self, host):
-        """设置连接的服务端ip."""
-        self._host = host
-
-    @property
-    def port(self):
-        """服务端端口号."""
-        return self._port
-
-    @port.setter
-    def port(self, port):
-        """设置要连接的服务端端口号."""
-        self._port = port
-
-    @property
-    def client(self):
-        """客户端socket实例."""
-        return self._client
-
-    @client.setter
-    def client(self, client: socket):
-        """设置客户端socket实例."""
-        self._client = client
-
-    def client_open(self):
-        """连接服务端."""
-        self.client.connect((self.host, self.port))
-        self._logger.info("*** 和服务端连接成功 ***")
-
-    def client_close(self):
-        """关闭客户端连接."""
-        self.client.close()
-        self._logger.warning("*** 客户端关闭连接 ***")
-
-    def client_send(self, message: Union[str, bytes]):
-        """客户端发送数据."""
-        if isinstance(message, str):
-            message = message.encode("UTF-8")
-        self.client.sendall(message)
-        self._logger.info("*** 客户端发送数据 *** -> data: %s", message[:129:])
-
-    def client_receive(self):
-        """客户端接收数据."""
+        Returns:
+            bool: 连接成功返回 True，否则返回 False。
+        """
         try:
-            while True:
-                data = self.client.recv(1024)
-                if not data:
+            self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
+            self.socket.connect((self.host, self.port))
+            self.is_connected = True
+            self.logger.info("已连接到服务器 %s: %s", self.host, self.port)
+
+            self.receive_thread = threading.Thread(
+                target=self._receive_data,
+                daemon=True
+            )
+            self.receive_thread.start()
+            return True
+        except Exception as e:
+            self.logger.warning("连接失败, %s", str(e))
+            self.is_connected = False
+            return False
+
+    def disconnect(self):
+        """断开与服务器的连接并释放资源。"""
+        if self.is_connected:
+            self.is_connected = False
+            try:
+                if self.socket:
+                    self.socket.close()
+                if self.receive_thread and self.receive_thread.is_alive():
+                    self.receive_thread.join(timeout=1)
+            except Exception as e:
+                self.logger.warning("断开连接时出错: %s", str(e))
+            finally:
+                self.logger.info("已断开与服务器的连接")
+
+    def send_data(self, data: bytes) -> bool:
+        """向服务器发送数据。
+
+        Args:
+            data: 要发送的字节数据。
+
+        Returns:
+            发送成功返回 True，失败返回 False。
+
+        Raises:
+            无显式抛出异常，但内部错误会打印到控制台。
+        """
+        if not self.is_connected:
+            self.logger.warning("未连接到服务器")
+            return False
+
+        try:
+            self.socket.sendall(data)
+            return True
+        except Exception as e:
+            self.logger.warning("发送数据出错: %s", str(e))
+            self.disconnect()
+            return False
+
+    def _receive_data(self):
+        """持续接收数据的内部方法。"""
+        while self.is_connected:
+            try:
+                data = self.socket.recv(self.buffer_size)
+                if not data:  # 服务器关闭连接
+                    self.logger.info("服务器关闭了连接")
+                    self.disconnect()
                     break
-                str_data = data.decode("utf-8")
-                self._logger.info("*** 客户端接收到服务端数据 *** -> data: %s", str_data)
-                self.operations()
-        except Exception as e:  # pylint: disable=W0718
-            self._logger.warning("*** 出现异常 *** -> 异常信息: %s", str(e))
-        finally:
-            self.client.close()
 
-    def operations(self):
-        """根据服务端发过来的数据进行的操作"""
+                if self.receive_callback:
+                    self.logger.info("收到数据: %s", data)
+                    self.logger.info("触发回调函数")
+                    self.receive_callback(data)
+                else:
+                    self.logger.info("收到数据: %s", data)
+            except ConnectionResetError:
+                self.logger.warning("连接被服务器重置")
+                self.disconnect()
+                break
+            except Exception as e:
+                if self.is_connected:
+                    self.logger.warning("接收数据出错: %s", str(e))
+                    self.disconnect()
+                break
 
-    def run_receive_thread(self):
-        """启动客户端线程, 实时监听服务端发来的数据."""
-        thread = threading.Thread(target=self.client_receive, daemon=False)
-        thread.start()
+    def __enter__(self):
+        """实现上下文管理协议，进入时自动连接。"""
+        self.connect()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """实现上下文管理协议，退出时自动断开连接。"""
+        self.disconnect()
