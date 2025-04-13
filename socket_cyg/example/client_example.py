@@ -1,6 +1,8 @@
+# pylint: skip-file
 import time
 
 from socket_cyg.socket_client import SocketClient
+
 
 if __name__ == "__main__":
     def my_callback(data: bytes):
