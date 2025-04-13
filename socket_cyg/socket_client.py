@@ -1,6 +1,7 @@
+# pylint: skip-file
+
 import socket
 import threading
-import time
 import logging
 from typing import Callable, Optional
 
@@ -11,14 +12,13 @@ class SocketClient:
     def __init__(self, host: str, port: int,
                  receive_callback: Optional[Callable[[bytes], None]] = None,
                  buffer_size: int = 1024):
-        """初始化 Socket 客户端。
+        """初始化 Socket 客户端.
 
         Args:
-            host: 要连接的服务器主机名或 IP 地址。
-            port: 服务器端口号。
-            receive_callback: 处理接收数据的回调函数（可选）。
-                回调函数应接受 bytes 类型作为唯一参数。
-            buffer_size: 接收缓冲区大小（字节），默认为 1024。
+            host: 要连接的服务器主机名或 IP 地址.
+            port: 服务器端口号.
+            receive_callback: 处理接收数据的回调函数, 回调函数应接受 bytes 类型作为唯一参数.
+            buffer_size: 接收缓冲区大小（字节）,默认为 1024.
         """
         self.host = host
         self.port = port
@@ -33,7 +33,7 @@ class SocketClient:
         """建立与服务器的连接, 连接成功后会自动启动后台线程持续接收数据.
 
         Returns:
-            bool: 连接成功返回 True，否则返回 False。
+            bool: 连接成功返回 True,否则返回 False.
         """
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -53,7 +53,7 @@ class SocketClient:
             return False
 
     def disconnect(self):
-        """断开与服务器的连接并释放资源。"""
+        """断开与服务器的连接并释放资源."""
         if self.is_connected:
             self.is_connected = False
             try:
@@ -67,16 +67,16 @@ class SocketClient:
                 self.logger.info("已断开与服务器的连接")
 
     def send_data(self, data: bytes) -> bool:
-        """向服务器发送数据。
+        """向服务器发送数据.
 
         Args:
-            data: 要发送的字节数据。
+            data: 要发送的字节数据.
 
         Returns:
-            发送成功返回 True，失败返回 False。
+            发送成功返回 True,失败返回 False.
 
         Raises:
-            无显式抛出异常，但内部错误会打印到控制台。
+            无显式抛出异常,但内部错误会打印到控制台.
         """
         if not self.is_connected:
             self.logger.warning("未连接到服务器")
@@ -91,7 +91,7 @@ class SocketClient:
             return False
 
     def _receive_data(self):
-        """持续接收数据的内部方法。"""
+        """持续接收数据的内部方法."""
         while self.is_connected:
             try:
                 data = self.socket.recv(self.buffer_size)
@@ -117,10 +117,10 @@ class SocketClient:
                 break
 
     def __enter__(self):
-        """实现上下文管理协议，进入时自动连接。"""
+        """实现上下文管理协议,进入时自动连接."""
         self.connect()
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
-        """实现上下文管理协议，退出时自动断开连接。"""
+        """实现上下文管理协议,退出时自动断开连接."""
         self.disconnect()
