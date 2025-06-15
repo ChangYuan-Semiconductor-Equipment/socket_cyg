@@ -4,6 +4,7 @@ import asyncio
 import datetime
 import logging
 import os
+import pathlib
 import socket
 import sys
 from asyncio import AbstractEventLoop
@@ -21,45 +22,56 @@ class CygSocketServerAsyncio:
     def __init__(self, address="127.0.0.1", port=8000):
         self._address = address
         self._port = port
-        self._logger = logging.getLogger(f"{self.__module__}.{self.__class__.__name__}")
+        self.logger = logging.getLogger(__name__)
         self._file_handler = None
-        self.set_log()
+        self._initial_log_config()
 
-    def set_log(self):
-        """设置日志."""
-        self.file_handler.setFormatter(logging.Formatter(self.LOG_FORMAT))
-        self.file_handler.setLevel(logging.INFO)
-        self.logger.addHandler(self.file_handler)
-        if sys.version_info.minor == 11:
-            logging.basicConfig(level=logging.INFO, encoding="UTF-8", format=self.LOG_FORMAT)
-        else:
-            console_handler = logging.StreamHandler()
-            console_handler.setFormatter(logging.Formatter(self.LOG_FORMAT))
-            console_handler.setLevel(logging.INFO)
-            self.logger.addHandler(console_handler)
-            self.logger.setLevel(logging.INFO)
+    def _initial_log_config(self) -> None:
+        """日志配置."""
+        self._create_log_dir()
+        self.logger.addHandler(self.file_handler)  # 保存日志
+
+    @staticmethod
+    def _create_log_dir():
+        """判断log目录是否存在, 不存在就创建."""
+        log_dir = pathlib.Path(f"{os.getcwd()}/log")
+        if not log_dir.exists():
+            os.mkdir(log_dir)
 
     @property
-    def file_handler(self):
-        """保存日志的日志器."""
+    def file_handler(self) -> TimedRotatingFileHandler:
+        """设置保存日志的处理器, 每隔 24h 自动生成一个日志文件.
+
+        Returns:
+            TimedRotatingFileHandler: 返回 TimedRotatingFileHandler 日志处理器.
+        """
         if self._file_handler is None:
-            log_dir = f"{os.getcwd()}/log"
-            os.makedirs(log_dir, exist_ok=True)
-            file_name = f"{log_dir}/{datetime.datetime.now().strftime('%Y-%m-%d')}_{os.path.basename(os.getcwd())}.log"
             self._file_handler = TimedRotatingFileHandler(
-                file_name, when="D", interval=1, backupCount=10, encoding="UTF-8"
+                f"{os.getcwd()}/log/socket.log",
+                when="D", interval=1, backupCount=10, encoding="UTF-8"
             )
+            self._file_handler.namer = self._custom_log_name
+            self._file_handler.setFormatter(logging.Formatter(self.LOG_FORMAT))
         return self._file_handler
 
-    @property
-    def logger(self):
-        """日志实例."""
-        return self._logger
+    @staticmethod
+    def _custom_log_name(log_path: str):
+        """自定义新生成的日志名称.
+
+        Args:
+            log_path: 原始的日志文件路径.
+
+        Returns:
+            str: 新生成的自定义日志文件路径.
+        """
+        _, suffix, date_str = log_path.split(".")
+        new_log_path = f"{os.getcwd()}/log/socket_{date_str}.{suffix}"
+        return new_log_path
 
     def operations_return_data(self, data: bytes):
         """操作返回数据."""
         data = data.decode("UTF-8")
-        self._logger.warning("*** 回显 *** -> 没有重写 operations_return_data 函数, 默认是回显.")
+        self.logger.warning("没有重写 operations_return_data 函数, 默认是回显.")
         return data
 
     async def socket_send(self, client_connection, data: bytes):
@@ -67,33 +79,33 @@ class CygSocketServerAsyncio:
         if client_connection:
             client_ip = client_connection.getpeername()
             await self.loop.sock_sendall(client_connection, data)
-            self._logger.info("***发送*** --> %s 发送成功, %s", client_ip, data)
+            self.logger.info("%s 发送成功, %s", client_ip, data)
         else:
-            self._logger.info("***发送*** --> 发送失败, %s, 未连接", data)
+            self.logger.info("发送数据 % 失败", data)
 
     async def receive_send(self, client_connection: socket.socket):
-        """接收发送数据."""
+        """接收后发送数据."""
         client_ip = client_connection.getpeername()[0]  # 获取连接客户端的ip
         try:
             while data := await self.loop.sock_recv(client_connection, 1024 * 1024):
-                self._logger.info("%s", '-' * 60)
-                self._logger.info("***Socket接收*** --> %s, 数据: %s", client_ip, data.decode('UTF-8'))
+                self.logger.info("%s", "-" * 60)
+                self.logger.info("接收到客户端 %s 的数据: %s", client_ip, data.decode("UTF-8"))
                 send_data = self.operations_return_data(data)  # 这个方法实现具体业务, 需要重写, 不重写回显
                 send_data_byte = send_data.encode("UTF-8") + b"\r\n"
                 await self.loop.sock_sendall(client_connection, send_data_byte)
-                self._logger.info("***Socket回复*** --> %s, 数据: %s", client_ip, send_data)
-                self._logger.info("%s", '-' * 60)
+                self.logger.info("回复客户端 %s 的数据是: %s", client_ip, send_data)
+                self.logger.info("%s", "-" * 60)
         except Exception as e:  # pylint: disable=W0718
-            self._logger.warning("***通讯出现异常*** --> 异常信息是: %s", e)
+            self.logger.warning("通讯出现异常, 异常信息是: %s", str(e))
         finally:
             self.clients.pop(client_ip)
             self.tasks.get(client_ip).cancel()
-            self._logger.warning("***下位机断开*** --> %s, 断开了", client_ip)
+            self.logger.warning("客户端 %s 断开了", client_ip)
             client_connection.close()
 
     async def listen_for_connection(self, socket_server: socket):
         """异步监听连接."""
-        self._logger.info("***服务端已启动*** --> %s 等待客户端连接", socket_server.getsockname())
+        self.logger.info("服务端 %s 已启动,等待客户端连接", socket_server.getsockname())
 
         while True:
             self.loop = asyncio.get_running_loop()
@@ -103,7 +115,7 @@ class CygSocketServerAsyncio:
             self.tasks.update({
                 address[0]: self.loop.create_task(self.receive_send(client_connection))
             })
-            self._logger.warning("***下位机连接*** --> %s, 连接了", address)
+            self.logger.warning("客户端 %s 连接了", address)
 
     async def run_socket_server(self):
         """运行socket服务, 并监听客户端连接."""
