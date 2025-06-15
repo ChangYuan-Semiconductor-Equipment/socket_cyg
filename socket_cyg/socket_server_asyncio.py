@@ -19,7 +19,15 @@ class CygSocketServerAsyncio:
     tasks = {}
     loop: AbstractEventLoop = None
 
-    def __init__(self, address="127.0.0.1", port=8000):
+    def __init__(self, address: str = "127.0.0.1", port: int = 1830):
+        """CygSocketServerAsyncio 构造方法.
+
+        Args:
+            address: 服务端 ip address.
+            port: 服务端端口.
+        """
+        logging.basicConfig(level=logging.INFO, encoding="UTF-8", format=self.LOG_FORMAT)
+
         self._address = address
         self._port = port
         self.logger = logging.getLogger(__name__)
