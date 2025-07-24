@@ -19,15 +19,17 @@ class CygSocketServerAsyncio:
     tasks = {}
     loop: AbstractEventLoop = None
 
-    def __init__(self, address: str = "127.0.0.1", port: int = 1830):
+    def __init__(self, address: str = "127.0.0.1", port: int = 1830, save_log: bool = False):
         """CygSocketServerAsyncio 构造方法.
 
         Args:
             address: 服务端 ip address.
             port: 服务端端口.
+            save_log: 是否保存日志, 默认不保存.
         """
         logging.basicConfig(level=logging.INFO, encoding="UTF-8", format=self.LOG_FORMAT)
 
+        self.save_log = save_log
         self._address = address
         self._port = port
         self.logger = logging.getLogger(__name__)
@@ -36,8 +38,9 @@ class CygSocketServerAsyncio:
 
     def _initial_log_config(self) -> None:
         """日志配置."""
-        self._create_log_dir()
-        self.logger.addHandler(self.file_handler)  # 保存日志
+        if self.save_log:
+            self._create_log_dir()
+            self.logger.addHandler(self.file_handler)  # 保存日志
 
     @staticmethod
     def _create_log_dir():
@@ -72,7 +75,7 @@ class CygSocketServerAsyncio:
         Returns:
             str: 新生成的自定义日志文件路径.
         """
-        _, suffix, date_str = log_path.split(".")
+        _, suffix, date_str, *__ = log_path.split(".")
         new_log_path = f"{os.getcwd()}/log/socket_{date_str}.{suffix}"
         return new_log_path
 
