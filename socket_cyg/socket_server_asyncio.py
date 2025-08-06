@@ -79,7 +79,7 @@ class CygSocketServerAsyncio:
         new_log_path = f"{os.getcwd()}/log/socket_{date_str}.{suffix}"
         return new_log_path
 
-    def operations_return_data(self, data: bytes):
+    async def operations_return_data(self, data: bytes):
         """操作返回数据."""
         data = data.decode("UTF-8")
         self.logger.warning("没有重写 operations_return_data 函数, 默认是回显.")
@@ -101,8 +101,8 @@ class CygSocketServerAsyncio:
             while data := await self.loop.sock_recv(client_connection, 1024 * 1024):
                 self.logger.info("%s", "-" * 60)
                 self.logger.info("接收到客户端 %s 的数据: %s", client_ip, data.decode("UTF-8"))
-                send_data = self.operations_return_data(data)  # 这个方法实现具体业务, 需要重写, 不重写回显
-                send_data_byte = send_data.encode("UTF-8") + b"\r\n"
+                send_data = await self.operations_return_data(data)  # 这个方法实现具体业务, 需要重写, 不重写回显
+                send_data_byte = send_data.encode("UTF-8")
                 await self.loop.sock_sendall(client_connection, send_data_byte)
                 self.logger.info("回复客户端 %s 的数据是: %s", client_ip, send_data)
                 self.logger.info("%s", "-" * 60)
