@@ -66,11 +66,12 @@ class SocketClient:
             finally:
                 self.logger.info("已断开与服务器的连接")
 
-    def send_data(self, data: bytes) -> tuple[bool, str]:
+    def send_data(self, data: bytes, wait_response: bool = True) -> tuple[bool, str]:
         """向服务器发送数据.
 
         Args:
             data: 要发送的字节数据.
+            wait_response: 是否需要回复, 默认需要回复.
 
         Returns:
             tuple[bool, str]: 发送成功返回 (True, 成功信息), 失败返回 (False, 失败信息).
@@ -81,7 +82,10 @@ class SocketClient:
 
         try:
             self.socket.sendall(data)
-            return True, "发送成功"
+            if wait_response:
+                response = self.socket.recv(self.buffer_size)
+                return True, response
+            return True, "发送成功, 不需要等待回复"
         except Exception as e:
             self.logger.warning("发送数据出错: %s", str(e))
             self.disconnect()
