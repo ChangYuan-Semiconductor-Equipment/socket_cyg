@@ -29,11 +29,11 @@ class SocketClient:
         self.receive_thread = None
         self.logger = logging.getLogger(self.__class__.__name__)
 
-    def connect(self) -> bool:
+    def connect(self) -> tuple[bool, str]:
         """建立与服务器的连接, 连接成功后会自动启动后台线程持续接收数据.
 
         Returns:
-            bool: 连接成功返回 True,否则返回 False.
+            tuple[bool, str]: 连接成功返回 (True, 描述信息), 否则返回 (False, 错误信息).
         """
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
@@ -46,11 +46,11 @@ class SocketClient:
                 daemon=True
             )
             self.receive_thread.start()
-            return True
+            return True, "连接成功"
         except Exception as e:
             self.logger.warning("连接失败, %s", str(e))
             self.is_connected = False
-            return False
+            return False, str(e)
 
     def disconnect(self):
         """断开与服务器的连接并释放资源."""
@@ -66,29 +66,26 @@ class SocketClient:
             finally:
                 self.logger.info("已断开与服务器的连接")
 
-    def send_data(self, data: bytes) -> bool:
+    def send_data(self, data: bytes) -> tuple[bool, str]:
         """向服务器发送数据.
 
         Args:
             data: 要发送的字节数据.
 
         Returns:
-            发送成功返回 True,失败返回 False.
-
-        Raises:
-            无显式抛出异常,但内部错误会打印到控制台.
+            tuple[bool, str]: 发送成功返回 (True, 成功信息), 失败返回 (False, 失败信息).
         """
         if not self.is_connected:
             self.logger.warning("未连接到服务器")
-            return False
+            return False, "未连接服务端"
 
         try:
             self.socket.sendall(data)
-            return True
+            return True, "发送成功"
         except Exception as e:
             self.logger.warning("发送数据出错: %s", str(e))
             self.disconnect()
-            return False
+            return False, str(e)
 
     def _receive_data(self):
         """持续接收数据的内部方法."""
