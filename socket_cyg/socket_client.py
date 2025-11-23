@@ -6,17 +6,19 @@ import logging
 class SocketClient:
     """用于持续与服务器通信的 TCP Socket 客户端."""
 
-    def __init__(self, host: str, port: int, buffer_size: int = 1024):
+    def __init__(self, host: str, port: int, buffer_size: int = 1024, time_out: int = 3):
         """初始化 Socket 客户端.
 
         Args:
             host: 要连接的服务器主机名或 IP 地址.
             port: 服务器端口号.
             buffer_size: 接收缓冲区大小（字节）,默认为 1024.
+            time_out: 等待回复超时时间, 默认 3 秒.
         """
         self.host = host
         self.port = port
         self.buffer_size = buffer_size
+        self.time_out = time_out
         self.socket = None
         self.is_connected = False
         self.receive_thread = None
@@ -25,12 +27,15 @@ class SocketClient:
     def connect(self) -> tuple[bool, str]:
         """建立与服务器的连接, 连接成功后会自动启动后台线程持续接收数据.
 
+        Args:
+
         Returns:
             tuple[bool, str]: 连接成功返回 (True, 描述信息), 否则返回 (False, 错误信息).
         """
         try:
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect((self.host, self.port))
+            self.socket.settimeout(self.time_out)
             self.is_connected = True
             self.logger.info("已连接到服务器 %s: %s", self.host, self.port)
             return True, "连接成功"
