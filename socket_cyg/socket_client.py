@@ -33,6 +33,8 @@ class SocketClient:
             tuple[bool, str]: 连接成功返回 (True, 描述信息), 否则返回 (False, 错误信息).
         """
         try:
+            if self.is_connected:
+                return True, "连接成功"
             self.socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
             self.socket.connect((self.host, self.port))
             self.socket.settimeout(self.time_out)
