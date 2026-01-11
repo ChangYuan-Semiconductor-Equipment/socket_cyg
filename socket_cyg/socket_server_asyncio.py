@@ -1,12 +1,10 @@
 # pylint: skip-file
 """异步socket."""
 import asyncio
-import datetime
 import logging
 import os
 import pathlib
 import socket
-import sys
 from asyncio import AbstractEventLoop
 from logging.handlers import TimedRotatingFileHandler
 
@@ -14,9 +12,6 @@ from logging.handlers import TimedRotatingFileHandler
 class CygSocketServerAsyncio:
     """异步socket class."""
     LOG_FORMAT = "%(asctime)s - %(levelname)s - %(module)s:%(lineno)d - %(message)s"
-
-    clients = {}  # 保存已连接的client
-    tasks = {}
     loop: AbstractEventLoop = None
 
     def __init__(self, address: str = "127.0.0.1", port: int = 1830, save_log: bool = False):
@@ -29,6 +24,8 @@ class CygSocketServerAsyncio:
         """
         logging.basicConfig(level=logging.INFO, encoding="UTF-8", format=self.LOG_FORMAT)
 
+        self.clients = {}  # 保存已连接的client
+        self.tasks = {}
         self.save_log = save_log
         self._address = address
         self._port = port
@@ -114,8 +111,12 @@ class CygSocketServerAsyncio:
             self.logger.warning("客户端 %s 断开了", client_ip)
             client_connection.close()
 
-    async def listen_for_connection(self, socket_server: socket):
-        """异步监听连接."""
+    async def listen_for_connection(self, socket_server: socket.socket):
+        """异步监听连接.
+
+        Args:
+            socket_server: socket.socket 实例.
+        """
         self.logger.info("服务端 %s 已启动,等待客户端连接", socket_server.getsockname())
 
         while True:
